@@ -1,9 +1,8 @@
 use crate::mappings::{create_link, get_mappings};
-use crate::repository::absolute_path_to_repo;
 use anyhow::{Result, bail};
+use std::path::PathBuf;
 
-pub fn execute(repo_input: Option<String>, specified: Vec<String>, dry: bool) -> Result<()> {
-    let repo = absolute_path_to_repo(repo_input)?;
+pub fn execute(repo: PathBuf, specified: Vec<String>, dry: bool) -> Result<()> {
     let maps = get_mappings(&repo.join(".dotfiles"))?;
 
     let mut created = false;

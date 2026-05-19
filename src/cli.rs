@@ -30,11 +30,6 @@ pub enum Commands {
         #[arg(env = "DOTFILES_REPO_PATH")]
         repo: Option<String>,
     },
-    /// Update your dotfiles repository
-    Update {
-        #[arg(env = "DOTFILES_REPO_PATH")]
-        repo: Option<String>,
-    },
     /// Generate shell completion script
     Completion {
         /// Shell to generate completion for

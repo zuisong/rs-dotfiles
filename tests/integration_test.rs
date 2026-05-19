@@ -21,15 +21,14 @@ fn test_link_and_clean() {
 
     // Create mappings.json
     let mappings_json = config_dir.join("mappings.json");
-    let content = format!(
-        r#"{{ "test_config.conf": "{}" }}"#,
-        dest_file.to_str().unwrap()
-    );
+    let dest_path = dest_file.to_string_lossy().replace("\\", "\\\\");
+    let content = format!(r#"{{ "test_config.conf": "{}" }}"#, dest_path);
     fs::write(mappings_json, content).unwrap();
 
     // Run link command
     let repo_input = Some(repo_dir.to_str().unwrap().to_string());
-    link::execute(repo_input.clone(), vec![], false).expect("Link command failed");
+    let repo_path = rs_dotfiles::repository::absolute_path_to_repo(repo_input.clone()).unwrap();
+    link::execute(repo_path.clone(), vec![], false).expect("Link command failed");
 
     // Verify link exists
     assert!(dest_file.exists(), "Link should have been created");
@@ -40,10 +39,10 @@ fn test_link_and_clean() {
     );
 
     // Run list command (output should be to stdout, but we just check if it doesn't crash)
-    list::execute(repo_input.clone()).expect("List command failed");
+    list::execute(repo_path.clone()).expect("List command failed");
 
     // Run clean command
-    clean::execute(repo_input).expect("Clean command failed");
+    clean::execute(repo_path).expect("Clean command failed");
 
     // Verify link is removed
     assert!(!dest_file.exists(), "Link should have been removed");
@@ -64,15 +63,14 @@ fn test_link_dry_run() {
     let dest_file = root_path.join("final_config.conf");
 
     let mappings_json = config_dir.join("mappings.json");
-    let content = format!(
-        r#"{{ "test_config.conf": "{}" }}"#,
-        dest_file.to_str().unwrap()
-    );
+    let dest_path = dest_file.to_string_lossy().replace("\\", "\\\\");
+    let content = format!(r#"{{ "test_config.conf": "{}" }}"#, dest_path);
     fs::write(mappings_json, content).unwrap();
 
     // Run link command with dry-run
     let repo_input = Some(repo_dir.to_str().unwrap().to_string());
-    link::execute(repo_input, vec![], true).expect("Dry-run Link command failed");
+    let repo_path = rs_dotfiles::repository::absolute_path_to_repo(repo_input).unwrap();
+    link::execute(repo_path, vec![], true).expect("Dry-run Link command failed");
 
     // Verify link does NOT exist
     assert!(
@@ -99,17 +97,19 @@ fn test_link_specific_files() {
     let dest2 = root_path.join("d2.conf");
 
     let mappings_json = config_dir.join("mappings.json");
+    let dest1_path = dest1.to_string_lossy().replace("\\", "\\\\");
+    let dest2_path = dest2.to_string_lossy().replace("\\", "\\\\");
     let content = format!(
         r#"{{ "config1.conf": "{}", "config2.conf": "{}" }}"#,
-        dest1.to_str().unwrap(),
-        dest2.to_str().unwrap()
+        dest1_path, dest2_path
     );
     fs::write(mappings_json, content).unwrap();
 
     let repo_input = Some(repo_dir.to_str().unwrap().to_string());
+    let repo_path = rs_dotfiles::repository::absolute_path_to_repo(repo_input).unwrap();
 
     // Only link config1
-    link::execute(repo_input, vec!["config1.conf".to_string()], false)
+    link::execute(repo_path, vec!["config1.conf".to_string()], false)
         .expect("Link specific failed");
 
     assert!(dest1.exists());
@@ -125,7 +125,8 @@ fn test_link_nothing_linked_error() {
     fs::create_dir_all(repo_dir.join(".dotfiles")).unwrap();
 
     let repo_input = Some(repo_dir.to_str().unwrap().to_string());
-    let result = link::execute(repo_input, vec![], false);
+    let repo_path = rs_dotfiles::repository::absolute_path_to_repo(repo_input).unwrap();
+    let result = link::execute(repo_path, vec![], false);
 
     assert!(result.is_err());
     assert!(

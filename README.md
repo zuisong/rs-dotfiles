@@ -6,7 +6,7 @@ This is a **Rust port** of the original [`dotfiles`](https://github.com/rhysd/do
 
 - **One binary executable**: Zero-dependency deployment. Just drop the binary into your `$PATH`.
 - **Do one thing and do it well**: Focuses strictly on managing dotfiles symlinks.
-- **Less dependency**: Only requires `git` (for the `update` command) to be installed on your system.
+- **Zero dependencies**: No external runtime or system dependencies like `git` required.
 - **Sensible defaults**: Pre-defined mappings for common configuration files on macOS, Linux, and Windows.
 - **Rust Powered**: Enhanced type safety, memory security, and performance.
 
@@ -15,6 +15,7 @@ This is a **Rust port** of the original [`dotfiles`](https://github.com/rhysd/do
 This Rust port is a simplified version of the original tool and differs in the following ways:
 
 - **No `clone` command**: You should clone your dotfiles repository manually using `git clone`.
+- **No `update` command**: You should run `git pull` inside your dotfiles repository manually to keep it updated.
 - **No `selfupdate` command**: Use your package manager or `cargo install` to update the tool.
 - **Focus on Symlinking**: The tool focuses entirely on managing the links between your repository and your home directory.
 
@@ -50,7 +51,6 @@ rs-dotfiles <SUBCOMMAND> [ARGS]
   - `--dry`: Preview changes without applying them.
 - `list`: Show all current symbolic links managed by this tool.
 - `clean`: Remove all symbolic links created by this tool.
-- `update`: Run `git pull` in your dotfiles repository.
 - `completion <SHELL>`: Generate shell completion script for bash, zsh, fish, powershell, or elvish.
 - `version`: Show the current version.
 

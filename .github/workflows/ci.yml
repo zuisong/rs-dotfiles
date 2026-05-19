@@ -14,7 +14,7 @@ jobs:
     name: Test and Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -31,10 +31,13 @@ jobs:
         run: cargo test --all-targets --all-features
 
   coverage:
-    name: Code Coverage
-    runs-on: ubuntu-latest
+    name: Code Coverage (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -52,3 +55,15 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           file: lcov.info
+          flag-name: ${{ matrix.os }}
+          parallel: true
+
+  coveralls-finish:
+    needs: coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Coveralls Finished
+        uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          parallel-finished: true

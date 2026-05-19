@@ -121,16 +121,18 @@ pub fn get_mappings(config_dir: &Path) -> Result<Mappings> {
 
     merge_file_to_mappings(&mut mappings, &config_dir.join("mappings.json"))?;
 
-    if is_unix_like(PLATFORM) {
+    let platforms = if is_unix_like(PLATFORM) {
+        vec![UNIX_LIKE_PLATFORM, PLATFORM]
+    } else {
+        vec![PLATFORM]
+    };
+
+    for p in platforms {
         merge_file_to_mappings(
             &mut mappings,
-            &config_dir.join(format!("mappings_{}.json", UNIX_LIKE_PLATFORM)),
+            &config_dir.join(format!("mappings_{}.json", p)),
         )?;
     }
-    merge_file_to_mappings(
-        &mut mappings,
-        &config_dir.join(format!("mappings_{}.json", PLATFORM)),
-    )?;
 
     Ok(mappings)
 }
@@ -145,7 +147,11 @@ fn merge_json_to_mappings(dest: &mut Mappings, src: &HashMap<String, Vec<String>
             if v.is_empty() {
                 continue;
             }
-            if !v.starts_with('~') && !v.starts_with('/') {
+            if !v.starts_with('~')
+                && !v.starts_with('/')
+                && !v.starts_with('\\')
+                && !Path::new(v).is_absolute()
+            {
                 bail!(
                     "value of mappings must be an absolute path like '/foo/.bar' or '~/.foo': {}",
                     v
@@ -190,9 +196,7 @@ pub fn create_link(from: &Path, to: &Path, dry: bool) -> Result<bool> {
         return Ok(true);
     }
 
-    if let Some(parent) = to.parent() {
-        fs::create_dir_all(parent)?;
-    }
+    to.parent().map(fs::create_dir_all).transpose()?;
 
     println!(
         "Link:  '{}' -> '{}'",
@@ -232,7 +236,10 @@ pub fn get_link_source(repo: &Path, to: &Path) -> Result<Option<PathBuf>> {
     }
 
     let source = fs::read_link(to)?;
-    if source.starts_with(repo) {
+    let canon_source = fs::canonicalize(&source).unwrap_or_else(|_| source.clone());
+    let canon_repo = fs::canonicalize(repo).unwrap_or_else(|_| repo.to_path_buf());
+
+    if canon_source.starts_with(&canon_repo) {
         Ok(Some(source))
     } else {
         Ok(None)
@@ -380,11 +387,13 @@ mod tests {
         assert!(get_mappings(root.path()).is_err());
         fs::remove_file(&path1).unwrap();
 
-        let path2 = root
-            .path()
-            .join(format!("mappings_{}.json", UNIX_LIKE_PLATFORM));
-        fs::write(&path2, "invalid json").unwrap();
-        assert!(get_mappings(root.path()).is_err());
+        if is_unix_like(PLATFORM) {
+            let path2 = root
+                .path()
+                .join(format!("mappings_{}.json", UNIX_LIKE_PLATFORM));
+            fs::write(&path2, "invalid json").unwrap();
+            assert!(get_mappings(root.path()).is_err());
+        }
     }
 
     #[test]

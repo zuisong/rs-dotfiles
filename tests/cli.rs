@@ -65,20 +65,6 @@ fn test_clean_no_links() {
 }
 
 #[test]
-fn test_update_not_git_repo() {
-    let temp = assert_fs::TempDir::new().unwrap();
-    let repo_dir = temp.child("repo");
-    repo_dir.create_dir_all().unwrap();
-
-    let mut cmd = Command::cargo_bin("rs-dotfiles").unwrap();
-    cmd.arg("update")
-        .env("DOTFILES_REPO_PATH", repo_dir.path())
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("git pull failed"));
-}
-
-#[test]
 fn test_link_and_list_and_clean() {
     let temp = assert_fs::TempDir::new().unwrap();
 
@@ -157,34 +143,6 @@ fn test_link_and_list_and_clean() {
 }
 
 #[test]
-fn test_update_success() {
-    let temp = assert_fs::TempDir::new().unwrap();
-    let bin_dir = temp.child("bin");
-    bin_dir.create_dir_all().unwrap();
-
-    // Create fake git executable
-    let fake_git = bin_dir.child("git");
-    fake_git.write_str("#!/bin/sh\nexit 0\n").unwrap();
-    std::process::Command::new("chmod")
-        .args(["+x", fake_git.path().to_str().unwrap()])
-        .status()
-        .unwrap();
-
-    let repo_dir = temp.child("repo");
-    repo_dir.create_dir_all().unwrap();
-
-    let path_env = std::env::var("PATH").unwrap_or_default();
-    let new_path = format!("{}:{}", bin_dir.path().to_string_lossy(), path_env);
-
-    let mut cmd = Command::cargo_bin("rs-dotfiles").unwrap();
-    cmd.arg("update")
-        .env("PATH", new_path)
-        .env("DOTFILES_REPO_PATH", repo_dir.path())
-        .assert()
-        .success();
-}
-
-#[test]
 fn test_link_and_clean_dir() {
     let temp = assert_fs::TempDir::new().unwrap();
     let repo_dir = temp.child("repo");
@@ -224,4 +182,14 @@ fn test_link_and_clean_dir() {
         .success();
 
     assert!(!dest_dir.path().exists());
+}
+
+#[test]
+fn test_link_non_existent_repo() {
+    let mut cmd = Command::cargo_bin("rs-dotfiles").unwrap();
+    cmd.arg("link")
+        .arg("/non/existent/path/for/repo")
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("is not a directory"));
 }
