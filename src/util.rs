@@ -49,4 +49,10 @@ mod tests {
         let expanded = expand_tilde("~").unwrap();
         assert!(expanded.is_absolute());
     }
+
+    #[test]
+    fn test_expand_tilde_other_user() {
+        let path = "~otheruser/some/path";
+        assert_eq!(expand_tilde(path).unwrap(), PathBuf::from(path));
+    }
 }

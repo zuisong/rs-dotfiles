@@ -113,10 +113,10 @@ pub fn get_mappings(config_dir: &Path) -> Result<Mappings> {
     if is_unix_like(PLATFORM)
         && let Some(m) = defaults.get(UNIX_LIKE_PLATFORM)
     {
-        merge_json_to_mappings(&mut mappings, m)?;
+        merge_json_to_mappings(&mut mappings, m).expect("defaults should be valid");
     }
     if let Some(m) = defaults.get(PLATFORM) {
-        merge_json_to_mappings(&mut mappings, m)?;
+        merge_json_to_mappings(&mut mappings, m).expect("defaults should be valid");
     }
 
     merge_file_to_mappings(&mut mappings, &config_dir.join("mappings.json"))?;
@@ -248,11 +248,9 @@ mod tests {
     fn test_get_default_mappings() {
         let defaults = get_default_mappings();
         assert!(defaults.contains_key("unixlike"));
-        assert!(
-            defaults.contains_key("darwin")
-                || defaults.contains_key("linux")
-                || defaults.contains_key("windows")
-        );
+        assert!(defaults.contains_key("darwin"));
+        assert!(defaults.contains_key("linux"));
+        assert!(defaults.contains_key("windows"));
     }
 
     #[test]
@@ -286,6 +284,32 @@ mod tests {
     }
 
     #[test]
+    fn test_merge_json_to_mappings_empty_key() {
+        let mut mappings = Mappings::new();
+        let mut src = HashMap::new();
+        src.insert("".to_string(), vec!["~/.vimrc".to_string()]);
+        let result = merge_json_to_mappings(&mut mappings, &src);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("empty key cannot be included")
+        );
+    }
+
+    #[test]
+    fn test_merge_json_to_mappings_empty_value() {
+        let mut mappings = Mappings::new();
+        let mut src = HashMap::new();
+        src.insert("vimrc".to_string(), vec!["".to_string()]);
+        let result = merge_json_to_mappings(&mut mappings, &src);
+        assert!(result.is_ok());
+        // Should be empty vector because empty values are skipped
+        assert_eq!(mappings.get("vimrc").unwrap().len(), 0);
+    }
+
+    #[test]
     fn test_create_link_source_not_exist() {
         let root = tempdir().unwrap();
         let from = root.path().join("source");
@@ -305,5 +329,110 @@ mod tests {
         let result = create_link(&from, &to, false).unwrap();
         assert!(result); // True means skipped but success (already exists)
         assert!(to.is_file()); // It's still a file, not a link
+    }
+
+    #[test]
+    fn test_merge_file_to_mappings_not_exist() {
+        let mut mappings = Mappings::new();
+        let root = tempdir().unwrap();
+        let path = root.path().join("not_exist.json");
+        merge_file_to_mappings(&mut mappings, &path).unwrap();
+        assert!(mappings.is_empty());
+    }
+
+    #[test]
+    fn test_create_link_dir() {
+        let root = tempdir().unwrap();
+        let from = root.path().join("source_dir");
+        let to = root.path().join("dest_dir");
+        fs::create_dir(&from).unwrap();
+
+        let result = create_link(&from, &to, false).unwrap();
+        assert!(result);
+
+        let metadata = fs::symlink_metadata(&to).unwrap();
+        assert!(metadata.file_type().is_symlink());
+        assert!(to.is_dir());
+    }
+
+    #[test]
+    fn test_merge_file_to_mappings_success() {
+        let mut mappings = Mappings::new();
+        let root = tempdir().unwrap();
+        let path = root.path().join("mappings.json");
+        fs::write(
+            &path,
+            r#"{"test_key": "~/.test_key", "multi_key": ["~/.k1", "~/.k2"]}"#,
+        )
+        .unwrap();
+        merge_file_to_mappings(&mut mappings, &path).unwrap();
+
+        assert_eq!(mappings.get("test_key").unwrap().len(), 1);
+        assert_eq!(mappings.get("multi_key").unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_get_mappings_invalid_file() {
+        let root = tempdir().unwrap();
+
+        let path1 = root.path().join(format!("mappings_{}.json", PLATFORM));
+        fs::write(&path1, "invalid json").unwrap();
+        assert!(get_mappings(root.path()).is_err());
+        fs::remove_file(&path1).unwrap();
+
+        let path2 = root
+            .path()
+            .join(format!("mappings_{}.json", UNIX_LIKE_PLATFORM));
+        fs::write(&path2, "invalid json").unwrap();
+        assert!(get_mappings(root.path()).is_err());
+    }
+
+    #[test]
+    fn test_create_link_parent_is_file() {
+        let root = tempdir().unwrap();
+        let from = root.path().join("source");
+        fs::write(&from, "src").unwrap();
+
+        let to = root.path().join("dest_dir/dest");
+        fs::write(root.path().join("dest_dir"), "this is a file").unwrap();
+
+        let result = create_link(&from, &to, false);
+        assert!(result.is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_create_link_symlink_fails() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempdir().unwrap();
+        let from = root.path().join("source");
+        fs::write(&from, "src").unwrap();
+
+        let parent = root.path().join("dest_dir");
+        fs::create_dir(&parent).unwrap();
+        fs::set_permissions(&parent, fs::Permissions::from_mode(0o555)).unwrap();
+
+        let to = parent.join("dest");
+        let result = create_link(&from, &to, false);
+        assert!(result.is_err());
+        fs::set_permissions(&parent, fs::Permissions::from_mode(0o777)).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_create_link_symlink_dir_fails() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempdir().unwrap();
+        let from = root.path().join("source_dir");
+        fs::create_dir(&from).unwrap();
+
+        let parent = root.path().join("dest_dir");
+        fs::create_dir(&parent).unwrap();
+        fs::set_permissions(&parent, fs::Permissions::from_mode(0o555)).unwrap();
+
+        let to = parent.join("dest");
+        let result = create_link(&from, &to, false);
+        assert!(result.is_err());
+        fs::set_permissions(&parent, fs::Permissions::from_mode(0o777)).unwrap();
     }
 }
